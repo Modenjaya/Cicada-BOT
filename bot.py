@@ -37,7 +37,7 @@ class Cicada:
         self.BASE_HEADERS = {}
         self.PRIVY_API = "https://auth.privy.io/api/v1/siwe"
         self.BASE_API = "https://campaign.cicada.finance/api"
-        self.REF_CODE = "ePwzamlQ" # U can change it with yours.
+        self.REF_CODE = "ltiM7mZp" # U can change it with yours.
         self.proxies = []
         self.proxy_index = 0
         self.account_proxies = {}
