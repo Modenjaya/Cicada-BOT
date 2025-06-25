@@ -11,6 +11,9 @@ from datetime import datetime, timezone
 from colorama import *
 import asyncio, random, uuid, json, os, pytz
 
+# Import pustaka Anti-Captcha resmi
+from anticaptchaofficial.turnstileproxyless import *
+
 wib = pytz.timezone('Asia/Jakarta')
 
 USER_AGENT = [
@@ -37,9 +40,9 @@ class Cicada:
         self.BASE_HEADERS = {}
         self.PRIVY_API = "https://auth.privy.io"
         self.BASE_API = "https://campaign.cicada.finance/api"
-        self.REF_CODE = "ltiM7mZp" 
+        self.REF_CODE = "ltiM7mZp" # Anda bisa mengubahnya dengan milik Anda.
         self.SITE_KEY = "0x4AAAAAAAM8ceq5KhP1uJBt"
-        self.CAPTCHA_KEY = None
+        self.CAPTCHA_KEY = None # Sekarang ini hanya untuk Anti-Captcha
         self.proxies = []
         self.proxy_index = 0
         self.account_proxies = {}
@@ -73,13 +76,18 @@ class Cicada:
         minutes, seconds = divmod(remainder, 60)
         return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
     
-    def load_2captcha_key(self):
+    # Fungsi ini khusus untuk memuat kunci Anti-Captcha
+    def load_anticaptcha_key(self):
         try:
-            with open("2captcha_key.txt", 'r') as file:
+            with open("anticaptcha_key.txt", 'r') as file:
                 captcha_key = file.read().strip()
-
-            return captcha_key
+                self.log(f"{Fore.GREEN + Style.BRIGHT}Menggunakan kunci Anti-Captcha dari anticaptcha_key.txt.{Style.RESET_ALL}")
+                return captcha_key
+        except FileNotFoundError:
+            self.log(f"{Fore.RED + Style.BRIGHT}File 'anticaptcha_key.txt' tidak ditemukan. Pastikan Anda memiliki kunci Anti-Captcha yang valid di dalamnya.{Style.RESET_ALL}")
+            return None
         except Exception as e:
+            self.log(f"{Fore.RED + Style.BRIGHT}Gagal memuat kunci Anti-Captcha: {e}{Style.RESET_ALL}")
             return None
     
     async def load_proxies(self, use_proxy_choice: bool):
@@ -93,31 +101,31 @@ class Cicada:
                         with open(filename, 'w') as f:
                             f.write(content)
                         self.proxies = [line.strip() for line in content.splitlines() if line.strip()]
-            else:
+            else: # use_proxy_choice == 2 (private proxy)
                 if not os.path.exists(filename):
-                    self.log(f"{Fore.RED + Style.BRIGHT}File {filename} Not Found.{Style.RESET_ALL}")
+                    self.log(f"{Fore.RED + Style.BRIGHT}File {filename} Tidak Ditemukan.{Style.RESET_ALL}")
                     return
                 with open(filename, 'r') as f:
                     self.proxies = [line.strip() for line in f.read().splitlines() if line.strip()]
             
             if not self.proxies:
-                self.log(f"{Fore.RED + Style.BRIGHT}No Proxies Found.{Style.RESET_ALL}")
+                self.log(f"{Fore.RED + Style.BRIGHT}Tidak Ada Proxy Yang Ditemukan.{Style.RESET_ALL}")
                 return
 
             self.log(
-                f"{Fore.GREEN + Style.BRIGHT}Proxies Total  : {Style.RESET_ALL}"
+                f"{Fore.GREEN + Style.BRIGHT}Total Proxy   : {Style.RESET_ALL}"
                 f"{Fore.WHITE + Style.BRIGHT}{len(self.proxies)}{Style.RESET_ALL}"
             )
         
         except Exception as e:
-            self.log(f"{Fore.RED + Style.BRIGHT}Failed To Load Proxies: {e}{Style.RESET_ALL}")
+            self.log(f"{Fore.RED + Style.BRIGHT}Gagal Memuat Proxy: {e}{Style.RESET_ALL}")
             self.proxies = []
 
     def check_proxy_schemes(self, proxies):
         schemes = ["http://", "https://", "socks4://", "socks5://"]
         if any(proxies.startswith(scheme) for scheme in schemes):
             return proxies
-        return f"http://{proxies}"
+        return f"http://{proxies}" # Default ke http:// jika tidak ada skema
 
     def get_next_proxy_for_account(self, account):
         if account not in self.account_proxies:
@@ -164,7 +172,7 @@ class Cicada:
 
             return payload
         except Exception as e:
-            raise Exception(f"Generate Req Payload Failed: {str(e)}")
+            raise Exception(f"Gagal Membuat Payload Permintaan: {str(e)}")
     
     def mask_account(self, account):
         try:
@@ -176,88 +184,77 @@ class Cicada:
     def print_question(self):
         while True:
             try:
-                print(f"{Fore.WHITE + Style.BRIGHT}1. Run With Proxyscrape Free Proxy{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}2. Run With Private Proxy{Style.RESET_ALL}")
-                print(f"{Fore.WHITE + Style.BRIGHT}3. Run Without Proxy{Style.RESET_ALL}")
-                choose = int(input(f"{Fore.BLUE + Style.BRIGHT}Choose [1/2/3] -> {Style.RESET_ALL}").strip())
+                print(f"{Fore.WHITE + Style.BRIGHT}1. Jalankan Dengan Proxy Gratis Proxyscrape{Style.RESET_ALL}")
+                print(f"{Fore.WHITE + Style.BRIGHT}2. Jalankan Dengan Proxy Pribadi{Style.RESET_ALL}")
+                print(f"{Fore.WHITE + Style.BRIGHT}3. Jalankan Tanpa Proxy (Untuk Koneksi Utama Bot){Style.RESET_ALL}") # Menambahkan peringatan
+                choose = int(input(f"{Fore.BLUE + Style.BRIGHT}Pilih [1/2/3] -> {Style.RESET_ALL}").strip())
 
                 if choose in [1, 2, 3]:
                     proxy_type = (
-                        "With Proxyscrape Free" if choose == 1 else 
-                        "With Private" if choose == 2 else 
-                        "Without"
+                        "Dengan Proxy Gratis Proxyscrape" if choose == 1 else 
+                        "Dengan Proxy Pribadi" if choose == 2 else 
+                        "Tanpa"
                     )
-                    print(f"{Fore.GREEN + Style.BRIGHT}Run {proxy_type} Proxy Selected.{Style.RESET_ALL}")
+                    print(f"{Fore.GREEN + Style.BRIGHT}Mode Proxy {proxy_type} Dipilih.{Style.RESET_ALL}")
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Please enter either 1, 2 or 3.{Style.RESET_ALL}")
+                    print(f"{Fore.RED + Style.BRIGHT}Masukkan angka 1, 2, atau 3.{Style.RESET_ALL}")
             except ValueError:
-                print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter a number (1, 2 or 3).{Style.RESET_ALL}")
+                print(f"{Fore.RED + Style.BRIGHT}Input tidak valid. Masukkan angka (1, 2 atau 3).{Style.RESET_ALL}")
 
         rotate = False
         if choose in [1, 2]:
             while True:
-                rotate = input(f"{Fore.BLUE + Style.BRIGHT}Rotate Invalid Proxy? [y/n] -> {Style.RESET_ALL}").strip()
+                rotate = input(f"{Fore.BLUE + Style.BRIGHT}Putar Proxy Tidak Valid? [y/n] -> {Style.RESET_ALL}").strip()
 
                 if rotate in ["y", "n"]:
                     rotate = rotate == "y"
                     break
                 else:
-                    print(f"{Fore.RED + Style.BRIGHT}Invalid input. Enter 'y' or 'n'.{Style.RESET_ALL}")
+                    print(f"{Fore.RED + Style.BRIGHT}Input tidak valid. Masukkan 'y' atau 'n'.{Style.RESET_ALL}")
 
         return choose, rotate
     
-    async def solve_cf_turnstile(self, proxy=None, retries=5):
+    async def solve_cf_turnstile(self, retries=5): # Parameter 'proxy' dihapus karena Proxyless
         for attempt in range(retries):
-            connector = ProxyConnector.from_url(proxy) if proxy else None
             try:
-                async with ClientSession(connector=connector, timeout=ClientTimeout(total=60)) as session:
+                if self.CAPTCHA_KEY is None:
+                    self.log(f"{Fore.RED + Style.BRIGHT}Kunci API Anti-Captcha tidak dimuat. Tidak dapat memecahkan captcha.{Style.RESET_ALL}")
+                    return None
+                
+                self.log(f"{Fore.YELLOW + Style.BRIGHT}Menggunakan Anti-Captcha Proxyless untuk memecahkan Turnstile...{Style.RESET_ALL}")
 
-                    if self.CAPTCHA_KEY is None:
-                        return None
-                    
-                    url = f"http://2captcha.com/in.php?key={self.CAPTCHA_KEY}&method=turnstile&sitekey={self.SITE_KEY}&pageurl={self.PRIVY_API}"
-                    async with session.get(url=url) as response:
-                        response.raise_for_status()
-                        result = await response.text()
+                # Inisialisasi solver TurnstileProxyless
+                solver = turnstileProxyless()
+                solver.set_verbose(1) # Atur ke 1 untuk melihat detail log dari pustaka Anti-Captcha
+                solver.set_key(self.CAPTCHA_KEY)
+                solver.set_website_url(self.PRIVY_API) # Situs tempat captcha muncul
+                solver.set_website_key(self.SITE_KEY)
+                # Anda bisa menambahkan action, cData, chlPageData jika diperlukan, tapi untuk kasus ini mungkin tidak.
+                # solver.set_action("some action")
+                # solver.set_cdata("cdata_token")
+                # solver.set_chlpagedata("chlpagedata_token")
 
-                        if 'OK|' not in result:
-                            await asyncio.sleep(5)
-                            continue
+                # Atur softId jika Anda memilikinya dari Anti-Captcha Dev Center
+                # solver.set_soft_id(0) # Ganti 0 dengan softId Anda
 
-                        request_id = result.split('|')[1]
+                token = solver.solve_and_return_solution()
 
-                        self.log(
-                            f"{Fore.MAGENTA+Style.BRIGHT} ● {Style.RESET_ALL}"
-                            f"{Fore.BLUE+Style.BRIGHT}Req Id  :{Style.RESET_ALL}"
-                            f"{Fore.WHITE + Style.BRIGHT} {request_id} {Style.RESET_ALL}"
-                        )
-
-                        for _ in range(30):
-                            res_url = f"http://2captcha.com/res.php?key={self.CAPTCHA_KEY}&action=get&id={request_id}"
-                            async with session.get(url=res_url) as res_response:
-                                res_response.raise_for_status()
-                                res_result = await res_response.text()
-
-                                if 'OK|' in res_result:
-                                    turnstile_token = res_result.split('|')[1]
-                                    return turnstile_token
-                                elif res_result == "CAPCHA_NOT_READY":
-                                    self.log(
-                                        f"{Fore.MAGENTA+Style.BRIGHT} ● {Style.RESET_ALL}"
-                                        f"{Fore.BLUE+Style.BRIGHT}Message :{Style.RESET_ALL}"
-                                        f"{Fore.YELLOW + Style.BRIGHT} Captcha Not Ready {Style.RESET_ALL}"
-                                    )
-                                    await asyncio.sleep(5)
-                                    continue
-                                else:
-                                    break
-
+                if token != 0:
+                    self.log(f"{Fore.GREEN + Style.BRIGHT}Captcha Turnstile Berhasil Dipecahkan!{Style.RESET_ALL}")
+                    return token
+                else:
+                    self.log(f"{Fore.RED + Style.BRIGHT}Anti-Captcha Gagal memecahkan Turnstile: {solver.error_code}{Style.RESET_ALL}")
+                    # Jika ada kesalahan, coba lagi setelah jeda
+                    await asyncio.sleep(5)
+                    continue # Lanjut ke percobaan berikutnya
             except Exception as e:
+                self.log(f"{Fore.RED + Style.BRIGHT}Kesalahan tak terduga saat memecahkan Turnstile: {e}{Style.RESET_ALL}")
                 if attempt < retries - 1:
                     await asyncio.sleep(5)
                     continue
                 return None
+        return None # Mengembalikan None jika semua percobaan gagal
     
     async def check_connection(self, proxy=None):
         connector = ProxyConnector.from_url(proxy) if proxy else None
@@ -269,12 +266,12 @@ class Cicada:
         except (Exception, ClientResponseError) as e:
             self.log(
                 f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
-                f"{Fore.RED+Style.BRIGHT} Connection Not 200 OK {Style.RESET_ALL}"
+                f"{Fore.RED+Style.BRIGHT} Koneksi Tidak 200 OK {Style.RESET_ALL}"
                 f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                 f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
             )
             return None
-        
+            
     async def init(self, address: str, turnstile_token: str, proxy=None, retries=5):
         url = f"{self.PRIVY_API}/api/v1/siwe/init"
         data = json.dumps({"address":address, "token":turnstile_token})
@@ -298,7 +295,7 @@ class Cicada:
                 self.log(
                     f"{Fore.MAGENTA+Style.BRIGHT} ● {Style.RESET_ALL}"
                     f"{Fore.BLUE+Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} GET Nonce Failed {Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} Gagal Mendapatkan Nonce {Style.RESET_ALL}"
                     f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                     f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
                 )
@@ -328,7 +325,7 @@ class Cicada:
                 self.log(
                     f"{Fore.MAGENTA+Style.BRIGHT} ● {Style.RESET_ALL}"
                     f"{Fore.BLUE+Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Login Failed {Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} Login Gagal {Style.RESET_ALL}"
                     f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                     f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
                 )
@@ -358,7 +355,7 @@ class Cicada:
                     continue
                 self.log(
                     f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Verify Failed {Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} Verifikasi Gagal {Style.RESET_ALL}"
                     f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                     f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
                 )
@@ -385,8 +382,8 @@ class Cicada:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}Task Lists:{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} GET Lists Failed {Style.RESET_ALL}"
+                    f"{Fore.CYAN+Style.BRIGHT}Daftar Tugas:{Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} Gagal Mendapatkan Daftar {Style.RESET_ALL}"
                     f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                     f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
                 )
@@ -411,9 +408,9 @@ class Cicada:
                     async with session.post(url=url, headers=headers, data=data, ssl=False) as response:
                         if response.status == 409:
                             self.log(
-                                f"{Fore.CYAN+Style.BRIGHT}     > {Style.RESET_ALL}"
+                                f"{Fore.CYAN+Style.BRIGHT}      > {Style.RESET_ALL}"
                                 f"{Fore.BLUE+Style.BRIGHT}Status:{Style.RESET_ALL}"
-                                f"{Fore.YELLOW+Style.BRIGHT} Already Completed {Style.RESET_ALL}"
+                                f"{Fore.YELLOW+Style.BRIGHT} Sudah Selesai {Style.RESET_ALL}"
                             )
                             return None
                         response.raise_for_status()
@@ -423,9 +420,9 @@ class Cicada:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}     > {Style.RESET_ALL}"
+                    f"{Fore.CYAN+Style.BRIGHT}      > {Style.RESET_ALL}"
                     f"{Fore.BLUE+Style.BRIGHT}Status:{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Not Completed {Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} Belum Selesai {Style.RESET_ALL}"
                     f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                     f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
                 )
@@ -450,9 +447,9 @@ class Cicada:
                     async with session.post(url=url, headers=headers, data=data, ssl=False) as response:
                         if response.status == 409:
                             self.log(
-                                f"{Fore.CYAN+Style.BRIGHT}     > {Style.RESET_ALL}"
-                                f"{Fore.BLUE+Style.BRIGHT}Gems  :{Style.RESET_ALL}"
-                                f"{Fore.YELLOW+Style.BRIGHT} No Reward {Style.RESET_ALL}"
+                                f"{Fore.CYAN+Style.BRIGHT}      > {Style.RESET_ALL}"
+                                f"{Fore.BLUE+Style.BRIGHT}Permata  :{Style.RESET_ALL}"
+                                f"{Fore.YELLOW+Style.BRIGHT} Tidak Ada Hadiah {Style.RESET_ALL}"
                             )
                             return None
                         response.raise_for_status()
@@ -462,9 +459,9 @@ class Cicada:
                     await asyncio.sleep(5)
                     continue
                 self.log(
-                    f"{Fore.CYAN+Style.BRIGHT}     > {Style.RESET_ALL}"
-                    f"{Fore.BLUE+Style.BRIGHT}Gems  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} No Reward {Style.RESET_ALL}"
+                    f"{Fore.CYAN+Style.BRIGHT}      > {Style.RESET_ALL}"
+                    f"{Fore.BLUE+Style.BRIGHT}Permata  :{Style.RESET_ALL}"
+                    f"{Fore.RED+Style.BRIGHT} Tidak Ada Hadiah {Style.RESET_ALL}"
                     f"{Fore.MAGENTA+Style.BRIGHT}-{Style.RESET_ALL}"
                     f"{Fore.YELLOW+Style.BRIGHT} {str(e)} {Style.RESET_ALL}"
                 )
@@ -476,7 +473,7 @@ class Cicada:
             proxy = self.get_next_proxy_for_account(address) if use_proxy else None
             self.log(
                 f"{Fore.CYAN + Style.BRIGHT}Proxy     :{Style.RESET_ALL}"
-                f"{Fore.WHITE + Style.BRIGHT} {proxy} {Style.RESET_ALL}"
+                f"{Fore.WHITE + Style.BRIGHT} {proxy if proxy else 'Tidak Ada Proxy'} {Style.RESET_ALL}"
             )
 
             check = await self.check_connection(proxy)
@@ -487,28 +484,25 @@ class Cicada:
                 proxy = self.rotate_proxy_for_account(address)
                 await asyncio.sleep(5)
                 continue
-
-            return False
+            
+            self.log(f"{Fore.RED + Style.BRIGHT}Gagal terhubung ke internet. Memulai ulang percobaan koneksi.{Style.RESET_ALL}")
+            await asyncio.sleep(10)
         
     async def process_get_nonce(self, address: str, use_proxy: bool, rotate_proxy: bool):
         is_valid = await self.process_check_connection(address, use_proxy, rotate_proxy)
         if is_valid:
-            proxy = self.get_next_proxy_for_account(address) if use_proxy else None
-
-            self.log(
-                f"{Fore.MAGENTA+Style.BRIGHT} ● {Style.RESET_ALL}"
-                f"{Fore.YELLOW+Style.BRIGHT}Solving Captcha Turnstile...{Style.RESET_ALL}"
-            )
-
-            turnstile_token = await self.solve_cf_turnstile(proxy)
+            # Pustaka anticaptchaofficial.turnstileproxyless tidak memerlukan proxy di parameter solve_cf_turnstile
+            turnstile_token = await self.solve_cf_turnstile() 
             if turnstile_token:
                 self.log(
                     f"{Fore.MAGENTA+Style.BRIGHT} ● {Style.RESET_ALL}"
-                    f"{Fore.BLUE+Style.BRIGHT}Message :{Style.RESET_ALL}"
-                    f"{Fore.GREEN+Style.BRIGHT} Captcha Turnstile Solved Successfully {Style.RESET_ALL}"
+                    f"{Fore.BLUE+Style.BRIGHT}Pesan :{Style.RESET_ALL}"
+                    f"{Fore.GREEN+Style.BRIGHT} Captcha Turnstile Berhasil Dipecahkan {Style.RESET_ALL}"
                 )
 
-                init = await self.init(address, turnstile_token, proxy)
+                # Untuk init, authenticate, dll., kita masih menggunakan proxy yang dipilih user
+                proxy_for_main_requests = self.get_next_proxy_for_account(address) if use_proxy else None
+                init = await self.init(address, turnstile_token, proxy_for_main_requests)
                 if init:
                     nonce = init["nonce"]
                     return nonce
@@ -517,8 +511,8 @@ class Cicada:
             
             self.log(
                 f"{Fore.MAGENTA+Style.BRIGHT} ● {Style.RESET_ALL}"
-                f"{Fore.BLUE+Style.BRIGHT}Message :{Style.RESET_ALL}"
-                f"{Fore.RED+Style.BRIGHT} Captcha Turnstile Not Solved {Style.RESET_ALL}"
+                f"{Fore.BLUE+Style.BRIGHT}Pesan :{Style.RESET_ALL}"
+                f"{Fore.RED+Style.BRIGHT} Captcha Turnstile Gagal Dipecahkan {Style.RESET_ALL}"
             )
             return False
 
@@ -537,7 +531,7 @@ class Cicada:
                 self.log(
                     f"{Fore.MAGENTA+Style.BRIGHT} ● {Style.RESET_ALL}"
                     f"{Fore.BLUE+Style.BRIGHT}Status  :{Style.RESET_ALL}"
-                    f"{Fore.RED+Style.BRIGHT} Login Success {Style.RESET_ALL}"
+                    f"{Fore.GREEN+Style.BRIGHT} Login Berhasil {Style.RESET_ALL}"
                 )
                 return True
 
@@ -552,7 +546,7 @@ class Cicada:
 
             task_lists = await self.task_lists(address, proxy)
             if task_lists:
-                self.log(f"{Fore.CYAN+Style.BRIGHT}Task Lists:{Style.RESET_ALL}")
+                self.log(f"{Fore.CYAN+Style.BRIGHT}Daftar Tugas:{Style.RESET_ALL}")
 
                 all_tasks = [task for task in task_lists if task]
 
@@ -573,13 +567,13 @@ class Cicada:
                     added = await self.add_points(address, task_id, proxy)
                     if added:
                         self.log(
-                            f"{Fore.CYAN+Style.BRIGHT}     > {Style.RESET_ALL}"
+                            f"{Fore.CYAN+Style.BRIGHT}      > {Style.RESET_ALL}"
                             f"{Fore.BLUE+Style.BRIGHT}Status:{Style.RESET_ALL}"
-                            f"{Fore.GREEN+Style.BRIGHT} Completed {Style.RESET_ALL}"
+                            f"{Fore.GREEN+Style.BRIGHT} Selesai {Style.RESET_ALL}"
                         )
                         self.log(
-                            f"{Fore.CYAN+Style.BRIGHT}     > {Style.RESET_ALL}"
-                            f"{Fore.BLUE+Style.BRIGHT}Point :{Style.RESET_ALL}"
+                            f"{Fore.CYAN+Style.BRIGHT}      > {Style.RESET_ALL}"
+                            f"{Fore.BLUE+Style.BRIGHT}Poin :{Style.RESET_ALL}"
                             f"{Fore.WHITE+Style.BRIGHT} {reward} {Style.RESET_ALL}"
                         )
 
@@ -588,8 +582,8 @@ class Cicada:
                         credit = gems.get("credit", 0)
 
                         self.log(
-                            f"{Fore.CYAN+Style.BRIGHT}     > {Style.RESET_ALL}"
-                            f"{Fore.BLUE+Style.BRIGHT}Gems  :{Style.RESET_ALL}"
+                            f"{Fore.CYAN+Style.BRIGHT}      > {Style.RESET_ALL}"
+                            f"{Fore.BLUE+Style.BRIGHT}Permata  :{Style.RESET_ALL}"
                             f"{Fore.WHITE+Style.BRIGHT} {credit} {Style.RESET_ALL}"
                         )
 
@@ -598,9 +592,12 @@ class Cicada:
             with open('accounts.txt', 'r') as file:
                 accounts = [line.strip() for line in file if line.strip()]
 
-            capctha_key = self.load_2captcha_key()
-            if capctha_key:
-                self.CAPTCHA_KEY = capctha_key
+            anticaptcha_key = self.load_anticaptcha_key()
+            if anticaptcha_key:
+                self.CAPTCHA_KEY = anticaptcha_key
+            else:
+                self.log(f"{Fore.RED + Style.BRIGHT}Kunci Anti-Captcha tidak ditemukan. Bot akan keluar.{Style.RESET_ALL}")
+                return 
 
             use_proxy_choice, rotate_proxy = self.print_question()
 
@@ -612,12 +609,14 @@ class Cicada:
                 self.clear_terminal()
                 self.welcome()
                 self.log(
-                    f"{Fore.GREEN + Style.BRIGHT}Account's Total: {Style.RESET_ALL}"
+                    f"{Fore.GREEN + Style.BRIGHT}Total Akun: {Style.RESET_ALL}"
                     f"{Fore.WHITE + Style.BRIGHT}{len(accounts)}{Style.RESET_ALL}"
                 )
 
                 if use_proxy:
                     await self.load_proxies(use_proxy_choice)
+                else:
+                    self.log(f"{Fore.YELLOW + Style.BRIGHT}Peringatan: Anda memilih 'Tanpa Proxy' untuk koneksi utama bot. Pastikan koneksi Anda stabil.{Style.RESET_ALL}")
 
                 separator = "=" * 25
                 for account in accounts:
@@ -632,7 +631,7 @@ class Cicada:
                         if not address:
                             self.log(
                                 f"{Fore.CYAN+Style.BRIGHT}Status    :{Style.RESET_ALL}"
-                                f"{Fore.RED + Style.BRIGHT} Invalid Private Key or Library Version Not Supported {Style.RESET_ALL}"
+                                f"{Fore.RED + Style.BRIGHT} Private Key Tidak Valid atau Versi Library Tidak Didukung {Style.RESET_ALL}"
                             )
                             continue
 
@@ -644,7 +643,7 @@ class Cicada:
                             "Origin": "https://campaign.cicada.finance",
                             "Privy-App-Id": "cltgsatvl0uwg126o8osk48a3",
                             "Privy-Client-Id": "client-WY2ifxw6VQBxyc2wm9qFMambiP3khbmE57s6Dov2WVpDA",
-                            "Refrer": "https://campaign.cicada.finance/",
+                            "Referer": "https://campaign.cicada.finance/", 
                             "Sec-Fetch-Dest": "empty",
                             "Sec-Fetch-Mode": "cors",
                             "Sec-Fetch-Site": "cross-site",
@@ -656,7 +655,7 @@ class Cicada:
                             "Accept": "*/*",
                             "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
                             "Origin": "https://campaign.cicada.finance",
-                            "Refrer": "https://campaign.cicada.finance/",
+                            "Referer": "https://campaign.cicada.finance/", 
                             "Sec-Fetch-Dest": "empty",
                             "Sec-Fetch-Mode": "cors",
                             "Sec-Fetch-Site": "same-origin",
@@ -672,11 +671,11 @@ class Cicada:
                 while delay > 0:
                     formatted_time = self.format_seconds(delay)
                     print(
-                        f"{Fore.CYAN+Style.BRIGHT}[ Wait for{Style.RESET_ALL}"
+                        f"{Fore.CYAN+Style.BRIGHT}[ Tunggu selama{Style.RESET_ALL}"
                         f"{Fore.WHITE+Style.BRIGHT} {formatted_time} {Style.RESET_ALL}"
                         f"{Fore.CYAN+Style.BRIGHT}... ]{Style.RESET_ALL}"
                         f"{Fore.WHITE+Style.BRIGHT} | {Style.RESET_ALL}"
-                        f"{Fore.YELLOW+Style.BRIGHT}All Accounts Have Been Processed...{Style.RESET_ALL}",
+                        f"{Fore.YELLOW+Style.BRIGHT}Semua Akun Telah Diproses...{Style.RESET_ALL}",
                         end="\r",
                         flush=True
                     )
@@ -684,7 +683,7 @@ class Cicada:
                     delay -= 1
 
         except FileNotFoundError:
-            self.log(f"{Fore.RED}File 'accounts.txt' Not Found.{Style.RESET_ALL}")
+            self.log(f"{Fore.RED}File 'accounts.txt' Tidak Ditemukan.{Style.RESET_ALL}")
             return
         except Exception as e:
             self.log(f"{Fore.RED+Style.BRIGHT}Error: {e}{Style.RESET_ALL}")
@@ -698,5 +697,5 @@ if __name__ == "__main__":
         print(
             f"{Fore.CYAN + Style.BRIGHT}[ {datetime.now().astimezone(wib).strftime('%x %X %Z')} ]{Style.RESET_ALL}"
             f"{Fore.WHITE + Style.BRIGHT} | {Style.RESET_ALL}"
-            f"{Fore.RED + Style.BRIGHT}[ EXIT ] Cicada - BOT{Style.RESET_ALL}                                       "                              
+            f"{Fore.RED + Style.BRIGHT}[ KELUAR ] Cicada - BOT{Style.RESET_ALL}                                      "      
         )
